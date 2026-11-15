@@ -18,6 +18,9 @@
   var WRONG_PENALTY = 100;   // points lost on the first wrong answer (score never goes below 0)
   var FIFTY_KEEP = 0.75;     // using 50/50 keeps 75% of that round's points (-25%)
   var SPEED_LIMIT = 7000;    // "Speed demon": average ms per correct answer
+  var PENDING_KEY = "hiddenCar.pending";   // scores that could not be sent yet (retried next visit)
+  var WORLD_TOP = 10;        // how many worldwide scores to ask for
+  var WORLD_TIMEOUT = 12000; // ms; the first call after a quiet spell can be slow
 
   // ---------- helpers ----------
   function $(id) { return document.getElementById(id); }
@@ -177,10 +180,105 @@
     });
   }
 
-  /** Shows this device's best scores. entry: the score just played (highlighted), or null. */
-  function showBoard(listEl, limit, entry) {
-    renderList(listEl, loadLocalBoard().slice(0, limit),
-      entry ? function (e) { return e.id === entry.id; } : null);
+  // ---------- worldwide leaderboard (optional: needs HC_CONFIG.leaderboardUrl) ----------
+  var world = { status: "idle", list: [] };   // status: idle | loading | ok | error
+  var scope = "local";                         // which board the player is looking at: "world" or "local"
+
+  function worldUrl() {
+    var u = window.HC_CONFIG && window.HC_CONFIG.leaderboardUrl;
+    return /^https:\/\//.test(u || "") ? u : "";
+  }
+
+  function renderNote(listEl, text) {
+    listEl.innerHTML = "";
+    var li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = text;
+    listEl.appendChild(li);
+  }
+
+  /** Draws both boards. entry: the score just played (highlighted on the result board), or null. */
+  function renderBoards(entry) {
+    [["board-welcome", 5, null], ["board-result", 10, entry]].forEach(function (b) {
+      var el = $(b[0]), mark = b[2];
+      if (scope === "world") {
+        if (world.status === "error" && !world.list.length) renderNote(el, "Worldwide scores aren't available right now.");
+        else if (!world.list.length && world.status !== "ok") renderNote(el, "Loading worldwide scores\u2026");
+        else renderList(el, world.list.slice(0, b[1]), mark
+          ? function (e) { return e.name === mark.name && e.score === mark.score; } : null);
+      } else {
+        renderList(el, loadLocalBoard().slice(0, b[1]), mark ? function (e) { return e.id === mark.id; } : null);
+      }
+    });
+  }
+
+  function fetchJson(url, opts) {
+    var ctl = window.AbortController ? new AbortController() : null, timer;
+    if (ctl) { opts.signal = ctl.signal; timer = setTimeout(function () { ctl.abort(); }, WORLD_TIMEOUT); }
+    return fetch(url, opts).then(function (r) {
+      if (!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    }).then(function (d) { clearTimeout(timer); return d; }, function (e) { clearTimeout(timer); throw e; });
+  }
+
+  function loadWorld() {
+    var url = worldUrl();
+    if (!url) return Promise.resolve();
+    world.status = "loading";
+    renderBoards(state.entry);
+    return fetchJson(url + (url.indexOf("?") < 0 ? "?" : "&") + "top=" + WORLD_TOP, {}).then(function (d) {
+      world.list = d && Array.isArray(d.top) ? d.top : [];
+      world.status = "ok";
+    }, function () { world.status = "error"; }).then(function () { renderBoards(state.entry); });
+  }
+
+  function sendScore(e) {
+    return fetchJson(worldUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },   // plain text avoids a browser pre-check the script can't answer
+      body: JSON.stringify({ name: e.name, score: e.score, cleared: e.cleared, total: e.total, won: e.won })
+    });
+  }
+
+  function loadPending() {
+    try { var l = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); return Array.isArray(l) ? l : []; } catch (e) { return []; }
+  }
+  function savePending(l) {
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify(l.slice(-5))); } catch (e) { /* ignore */ }
+  }
+
+  /** Tries to send scores that failed earlier. A score the server rejects is dropped; a network failure keeps it. */
+  function flushPending() {
+    var list = loadPending();
+    if (!worldUrl() || !list.length) return Promise.resolve();
+    var keep = [];
+    return list.reduce(function (p, e) {
+      return p.then(function () {
+        return sendScore(e).then(function () { /* sent or rejected: either way, drop it */ }, function () { keep.push(e); });
+      });
+    }, Promise.resolve()).then(function () { savePending(keep); });
+  }
+
+  function submitWorld(entry) {
+    var rank = $("result-rank"), tail = "Send your score to a friend. Can they beat it?";
+    rank.textContent = "Sending your score to the worldwide board\u2026";
+    sendScore(entry).then(function (res) {
+      if (res && res.ok) rank.textContent = "You are #" + res.rank + " in the world. " + tail;
+      else if (res && res.error === "name") rank.textContent = "That name can't be shown on the worldwide board. Try another name. " + tail;
+      else rank.textContent = "Your score wasn't added to the worldwide board. " + tail;
+      return loadWorld();
+    }, function () {
+      var l = loadPending(); l.push(entry); savePending(l);
+      rank.textContent = "Couldn't reach the worldwide board. Your score will be sent next time. " + tail;
+    });
+  }
+
+  function setScope(next) {
+    scope = next;
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
+      t.classList.toggle("active", t.dataset.scope === scope);
+    });
+    renderBoards(state.entry);
   }
 
   // ---------- state ----------
@@ -190,7 +288,7 @@
     car: null, level: 1, grid: 2, tileCount: 4,
     revealed: [], revealedCount: 0, locked: false,
     lives: LIVES, missed: 0, fiftyUsed: false, fiftyRound: false,
-    roundStart: 0, times: [], sharp: false, badges: [], cardUrl: ""
+    roundStart: 0, times: [], sharp: false, badges: [], cardUrl: "", entry: null
   };
 
   // ---------- screens ----------
@@ -202,7 +300,7 @@
   }
 
   function goHome() {
-    showBoard($("board-welcome"), 5, null);
+    renderBoards(null);
     showScreen("screen-welcome");
     $("player-name").focus();
   }
@@ -210,6 +308,7 @@
   // ---------- game flow ----------
   function startGame(name) {
     state.name = name;
+    state.entry = null;
     state.deck = state.nextDeck || pickDeck();   // first game: deck chosen (and photos loading) since the page opened
     state.nextDeck = null;
     state.total = state.deck.length;
@@ -513,6 +612,7 @@
       won: won, ts: Date.now()
     };
     addLocalScore(entry);
+    state.entry = entry;
 
     $("result-eyebrow").textContent = won ? "Perfect run" : outcome === "done" ? "Finished" : "Game over";
     $("result-title").textContent = won ? "YOU WIN!" : outcome === "done" ? "WELL PLAYED" : "GAME OVER";
@@ -524,7 +624,8 @@
     $("result-score").textContent = state.score;
     $("result-rank").textContent = "Send your score to a friend. Can they beat it?";
     renderBadges();
-    showBoard($("board-result"), 10, entry);
+    renderBoards(entry);
+    if (worldUrl() && entry.score > 0) submitWorld(entry);
     resetShare();
     showScreen("screen-result");
     $("btn-again").focus();
@@ -760,7 +861,17 @@
       $("name-form").querySelector("button").disabled = true;
     }
     $("player-name").value = loadName();
-    showBoard($("board-welcome"), 5, null);
+    if (worldUrl()) {
+      scope = "world";
+      Array.prototype.forEach.call(document.querySelectorAll(".tabs"), function (t) { t.classList.remove("hidden"); });
+      Array.prototype.forEach.call(document.querySelectorAll(".board-title"), function (t) { t.textContent = "Leaderboard"; });
+      $("world-note").classList.remove("hidden");
+      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
+        t.addEventListener("click", function () { setScope(t.dataset.scope); });
+      });
+    }
+    renderBoards(null);
+    flushPending().then(loadWorld);
     var li = window.HC_CONFIG && window.HC_CONFIG.linkedinUrl;
     if (/^https:\/\//.test(li || "")) {
       $("linkedin-link").href = li;
