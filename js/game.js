@@ -210,7 +210,8 @@
   // ---------- game flow ----------
   function startGame(name) {
     state.name = name;
-    state.deck = shuffle(window.CARS).slice(0, Math.min(MAX_LEVELS, window.CARS.length));
+    state.deck = state.nextDeck || pickDeck();   // first game: deck chosen (and photos loading) since the page opened
+    state.nextDeck = null;
     state.total = state.deck.length;
     state.index = 0;
     state.score = 0;
@@ -222,7 +223,7 @@
     state.sharp = false;
     state.badges = [];
     renderLives(false);
-    preloadDeck(0);
+    preloadDeck(state.deck, 0);
     $("hud-name").textContent = name;
     $("hud-score").textContent = "0";
     showScreen("screen-game");
@@ -248,22 +249,33 @@
   function loadImg(src, done) {
     var rec = imgCache[src];
     if (!rec) {
-      rec = imgCache[src] = { ok: false, cbs: [] };
+      rec = imgCache[src] = { ok: false, cbs: [], src: src, retried: false };
       var im = new Image();
-      im.onload = im.onerror = function () {
+      var finish = function () {
         rec.ok = true;
-        rec.cbs.splice(0).forEach(function (f) { f(); });
+        rec.cbs.splice(0).forEach(function (f) { f(rec.src); });
+      };
+      im.onload = finish;
+      im.onerror = function () {
+        // small photo missing: fall back to the bigger one in images/cars/
+        if (!rec.retried && src.indexOf(PHOTO_DIR) === 0) {
+          rec.retried = true;
+          rec.src = src.replace(PHOTO_DIR, "images/cars/");
+          im.src = rec.src;
+        } else finish();
       };
       im.src = src;
     }
-    if (rec.ok) done(); else rec.cbs.push(done);
+    if (rec.ok) done(rec.src); else rec.cbs.push(done);
   }
 
   /** Loads the photos of this game's cars in order, one after the other, in the background. */
-  function preloadDeck(from) {
-    if (from >= state.deck.length) return;
-    loadImg(photoSrc(state.deck[from]), function () { preloadDeck(from + 1); });
+  function preloadDeck(deck, from) {
+    if (from >= deck.length) return;
+    loadImg(photoSrc(deck[from]), function () { preloadDeck(deck, from + 1); });
   }
+
+  function pickDeck() { return shuffle(window.CARS).slice(0, Math.min(MAX_LEVELS, window.CARS.length)); }
 
   function startRound() {
     var level = state.index + 1;
@@ -280,7 +292,7 @@
     state.fiftyRound = false;
     $("btn-fifty").disabled = true;
 
-    $("picture").style.backgroundImage = "url('" + photoSrc(state.car) + "')";
+    $("picture").style.backgroundImage = "none";
     $("feedback").classList.add("hidden");
     $("feedback").classList.remove("good", "bad");
 
@@ -319,8 +331,9 @@
     updateHud();
     $("picture").classList.add("loading");
     $("hint").textContent = "Loading photo…";
-    loadImg(photoSrc(car), function () {
+    loadImg(photoSrc(car), function (src) {
       if (state.car !== car) return;   // the player already moved on
+      $("picture").style.backgroundImage = "url('" + src + "')";
       $("picture").classList.remove("loading");
       state.locked = false;
       state.roundStart = Date.now();
@@ -753,6 +766,7 @@
       $("linkedin-link").href = li;
       $("linkedin-link").classList.remove("hidden");
     }
+    if (cars.length >= 4) { state.nextDeck = pickDeck(); preloadDeck(state.nextDeck, 0); }   // warm up while the player types a name
     window.HiddenCar = { calcPoints: calcPoints, state: state };
   })();
 })();
