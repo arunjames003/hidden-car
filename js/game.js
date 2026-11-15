@@ -221,6 +221,7 @@
     state.sharp = false;
     state.badges = [];
     renderLives(false);
+    preloadDeck(0);
     $("hud-name").textContent = name;
     $("hud-score").textContent = "0";
     showScreen("screen-game");
@@ -240,6 +241,28 @@
     return shuffle(names);
   }
 
+  // ---------- photo loading (one photo at a time, so the first round starts fast) ----------
+  var imgCache = {};
+  function loadImg(src, done) {
+    var rec = imgCache[src];
+    if (!rec) {
+      rec = imgCache[src] = { ok: false, cbs: [] };
+      var im = new Image();
+      im.onload = im.onerror = function () {
+        rec.ok = true;
+        rec.cbs.splice(0).forEach(function (f) { f(); });
+      };
+      im.src = src;
+    }
+    if (rec.ok) done(); else rec.cbs.push(done);
+  }
+
+  /** Loads the photos of this game's cars in order, one after the other, in the background. */
+  function preloadDeck(from) {
+    if (from >= state.deck.length) return;
+    loadImg(state.deck[from].img, function () { preloadDeck(from + 1); });
+  }
+
   function startRound() {
     var level = state.index + 1;
     var n = level + 1;                 // level 1 -> 2x2, level 2 -> 3x3, ...
@@ -251,10 +274,9 @@
     state.tileCount = count;
     state.revealed = [];
     state.revealedCount = 0;
-    state.locked = false;
+    state.locked = true;               // unlocked when the photo has loaded
     state.fiftyRound = false;
-    state.roundStart = Date.now();
-    $("btn-fifty").disabled = state.fiftyUsed;
+    $("btn-fifty").disabled = true;
 
     $("picture").style.backgroundImage = "url('" + state.car.img + "')";
     $("feedback").classList.add("hidden");
@@ -290,9 +312,20 @@
       opts.appendChild(o);
     });
 
-    // one random tile is open at the start
-    revealTile(Math.floor(Math.random() * count), true);
+    // wait for the photo, then open one random tile and start the round
+    var car = state.car;
     updateHud();
+    $("picture").classList.add("loading");
+    $("hint").textContent = "Loading photo…";
+    loadImg(car.img, function () {
+      if (state.car !== car) return;   // the player already moved on
+      $("picture").classList.remove("loading");
+      state.locked = false;
+      state.roundStart = Date.now();
+      $("btn-fifty").disabled = state.fiftyUsed;
+      revealTile(Math.floor(Math.random() * count), true);
+      updateHud();
+    });
   }
 
   function revealTile(i, instant) {
@@ -711,7 +744,6 @@
       $("name-error").textContent = "Add at least 4 cars in js/cars.js to play.";
       $("name-form").querySelector("button").disabled = true;
     }
-    cars.forEach(function (c) { var im = new Image(); im.src = c.img; }); // preload
     $("player-name").value = loadName();
     showBoard($("board-welcome"), 5, null);
     var li = window.HC_CONFIG && window.HC_CONFIG.linkedinUrl;
