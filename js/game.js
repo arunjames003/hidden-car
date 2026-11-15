@@ -13,6 +13,7 @@
   var STORE_KEY = "hiddenCar.leaderboard.v1";
   var NAME_KEY = "hiddenCar.lastName";
   var SOUND_KEY = "hiddenCar.sound";
+  var PHOTO_DIR = "images/cars-low/";   // small photos (720 px) used in the game; images/cars/ keeps the bigger ones
   var LIVES = 2;             // wrong answers allowed before the game ends = LIVES - 1
   var WRONG_PENALTY = 100;   // points lost on the first wrong answer (score never goes below 0)
   var FIFTY_KEEP = 0.75;     // using 50/50 keeps 75% of that round's points (-25%)
@@ -243,6 +244,7 @@
 
   // ---------- photo loading (one photo at a time, so the first round starts fast) ----------
   var imgCache = {};
+  function photoSrc(car) { return car.img.replace(/^images\/cars\//, PHOTO_DIR); }
   function loadImg(src, done) {
     var rec = imgCache[src];
     if (!rec) {
@@ -260,7 +262,7 @@
   /** Loads the photos of this game's cars in order, one after the other, in the background. */
   function preloadDeck(from) {
     if (from >= state.deck.length) return;
-    loadImg(state.deck[from].img, function () { preloadDeck(from + 1); });
+    loadImg(photoSrc(state.deck[from]), function () { preloadDeck(from + 1); });
   }
 
   function startRound() {
@@ -278,7 +280,7 @@
     state.fiftyRound = false;
     $("btn-fifty").disabled = true;
 
-    $("picture").style.backgroundImage = "url('" + state.car.img + "')";
+    $("picture").style.backgroundImage = "url('" + photoSrc(state.car) + "')";
     $("feedback").classList.add("hidden");
     $("feedback").classList.remove("good", "bad");
 
@@ -317,7 +319,7 @@
     updateHud();
     $("picture").classList.add("loading");
     $("hint").textContent = "Loading photo…";
-    loadImg(car.img, function () {
+    loadImg(photoSrc(car), function () {
       if (state.car !== car) return;   // the player already moved on
       $("picture").classList.remove("loading");
       state.locked = false;
