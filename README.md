@@ -4,6 +4,21 @@ A car photo is hidden behind a grid of tiles. Open tiles for clues and pick the 
 
 Created by **Arun James**. Feedback or bugs? Use the LinkedIn icon in the page footer.
 
+## How it is built
+Plain **HTML, CSS and JavaScript**. There is no framework, no build step and nothing to install. (JavaScript is not Java: they are different languages.)
+- `index.html`: the page structure (screens, buttons, leaderboard).
+- `css/style.css`: the look (colors, layout, animations).
+- `js/game.js`: the game rules, scoring, lives, 50/50, badges, sound, confetti and the score card picture.
+- `js/cars.js`: the list of cars. `js/config.js`: the settings.
+- `apps-script/Code.gs`: the worldwide leaderboard backend. It is Google Apps Script (also JavaScript) and runs on Google's servers, saving scores into a Google Sheet.
+
+Where it runs:
+- **GitHub Pages** hosts the files for free. It can only serve files, so it cannot store scores.
+- **Google Sheets + Apps Script** store and return the worldwide scores.
+- **The player's browser** keeps the device scores and the sound setting.
+
+Trade-off: all game logic runs in the player's browser, so a determined person can read the answers in the page source or send a fake score. That is fine for a friendly game. Anything with real prizes would need answers and scores checked on a server.
+
 ## Run it
 Double-click `index.html`. No install or server needed.
 
