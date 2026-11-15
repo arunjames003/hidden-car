@@ -22,6 +22,7 @@
         <label for="player-name">Your name</label>
         <input id="player-name" type="text" maxlength="15" placeholder="Enter your name" required>
         <p id="name-error" class="error" role="alert"></p>
+        <p id="world-note" class="fine hidden">Your name and score appear on the worldwide leaderboard.</p>
         <button type="submit" class="btn primary big">Start Game</button>
       </form>
 
@@ -38,7 +39,13 @@
     </div>
 
     <div class="card board-card">
-      <h2>Best scores on this device</h2>
+      <div class="board-head">
+        <h2 class="board-title">Best scores on this device</h2>
+        <div class="tabs hidden" role="group" aria-label="Choose leaderboard">
+          <button type="button" class="tab active" data-scope="world">Worldwide</button>
+          <button type="button" class="tab" data-scope="local">This device</button>
+        </div>
+      </div>
       <ol id="board-welcome" class="board"></ol>
     </div>
   </section>
@@ -109,7 +116,13 @@
       </div>
     </div>
     <div class="card board-card">
-      <h2>Best scores on this device</h2>
+      <div class="board-head">
+        <h2 class="board-title">Best scores on this device</h2>
+        <div class="tabs hidden" role="group" aria-label="Choose leaderboard">
+          <button type="button" class="tab active" data-scope="world">Worldwide</button>
+          <button type="button" class="tab" data-scope="local">This device</button>
+        </div>
+      </div>
       <ol id="board-result" class="board"></ol>
     </div>
   </section>

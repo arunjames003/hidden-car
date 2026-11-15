@@ -40,14 +40,17 @@ After the game, the player can share a score picture:
 - **Computer:** the picture is copied, WhatsApp opens, and the player pastes it with Ctrl+V. "Save picture" downloads it instead.
 - "Copy text" copies the message only.
 
-The best 10 scores are saved on each device only (no online leaderboard).
+## Leaderboard
+- **This device:** the best 10 scores are always saved in the player's browser.
+- **Worldwide (optional):** scores go to a Google Sheet through a small script. Setup takes about 10 minutes: see `SETUP_LEADERBOARD.md`. It shows one best score per name, and a score that cannot be sent is kept and retried on the next visit. Until `leaderboardUrl` is set, only the device board is shown.
 
 ## Settings (`js/config.js`)
 - `shareUrl`: your public link (for example the GitHub Pages address). It is added to the share message and the score picture.
 - `linkedinUrl`: your LinkedIn profile address (starting with `https://`). The footer LinkedIn icon opens it. Leave it empty to hide the icon.
+- `leaderboardUrl`: the Web app URL of the worldwide leaderboard (starting with `https://`). Leave it empty for device-only scores.
 
 ## Add or change cars
-1. Save a 4:3 photo (about 1200×900 px, JPG) in `images/cars/`. The file name should be the car name.
+1. Save a 4:3 photo (JPG) in `images/cars/` (the bigger copy) and a smaller copy of the same photo, about 720×540 px, with the same file name in `images/cars-low/`. The game loads the small one and falls back to the big one if the small one is missing. The file name should be the car name.
 2. Add one entry in `js/cars.js`: `img`, `name`, `make`, a one-line `fact`, and `specs` (`year`, `engine`, `power`, `origin`). The specs strip is shown after each answer.
 
 At least 4 cars are needed. The list has 54 cars now.
@@ -60,5 +63,5 @@ All photos are from Unsplash, so no credit is shown in the game.
 
 ## Known limits
 - Answers are in the page source, so a determined player can cheat. Fine for a casual game.
-- Scores on a device can be edited by anyone using that browser, and are not verified.
+- Scores on a device can be edited by anyone using that browser, and are not verified. The worldwide board rejects impossible scores but cannot stop a believable fake one: delete such rows in the sheet.
 - Car specs were collected from general sources and may not match the exact version in a photo. Please check them before publishing.
